@@ -1,0 +1,12 @@
+domain: cert-manager.io
+layout:
+- go.kubebuilder.io/v3
+projectName: contour-httpproxy-shim
+repo: github.com/jefedavis/contour-httpproxy-shim
+resources:
+- controller: true
+  domain: cert-manager.io
+  group: contour
+  kind: HttpProxy
+  version: v1
+version: "3"
