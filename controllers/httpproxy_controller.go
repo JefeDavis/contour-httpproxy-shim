@@ -19,9 +19,12 @@ package controllers
 import (
 	"context"
 
+	cmv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmetav1 "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	"github.com/go-logr/logr"
 	projectcontourv1 "github.com/projectcontour/contour/apis/projectcontour/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -132,38 +135,25 @@ func (r *HTTPProxyReconciler) reconcileCertificate(ctx context.Context, hp *proj
 		return nil
 	}
 
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "cert-manager.io/v1",
-			"kind":       certificateKind,
-			"spec": map[string]interface{}{
-				"dnsNames":   []string{virtualHost.Fqdn},
-				"secretName": virtualHost.TLS.SecretName,
-				"commonName": virtualHost.Fqdn,
-				"issuerRef": map[string]interface{}{
-					"group": issuer.Group,
-					"kind":  issuer.Kind,
-					"name":  issuer.Name,
-				},
-				"usages": []string{
-					usageDigitalSignature,
-					usageKeyEncipherment,
-					usageServerAuth,
-					usageClientAuth,
-				},
-			},
+	certificate := &cmv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      hp.Name,
+			Namespace: hp.Namespace,
+			// OwnerReferences: []metav1.OwnerReferences{*metav1.NewControllerRef(hp, r.Scheme)},
+		},
+		Spec: cmv1.CertificateSpec{
+			DNSNames:   []string{virtualHost.Fqdn},
+			SecretName: virtualHost.TLS.SecretName,
+			IssuerRef:  issuer,
+			Usages:     cmv1.DefaultKeyUsages(),
 		},
 	}
 
-	obj.SetNamespace(hp.Name)
-	obj.SetNamespace(hp.Namespace)
-
-	err := ctrl.SetControllerReference(hp, obj, r.Scheme)
-	if err != nil {
+	if err := ctrl.SetControllerReference(hp, certificate, r.Scheme); err != nil {
 		return err
 	}
 
-	err = r.Patch(ctx, obj, client.Apply, &client.PatchOptions{
+	err := r.Patch(ctx, certificate, client.Apply, &client.PatchOptions{
 		Force:        func() *bool { b := true; return &b }(),
 		FieldManager: "cert-manager-httpproxy-shim",
 	})
@@ -176,8 +166,8 @@ func (r *HTTPProxyReconciler) reconcileCertificate(ctx context.Context, hp *proj
 	return nil
 }
 
-func (r *HTTPProxyReconciler) getIssuer(hp *projectcontourv1.HTTPProxy) *certIssuer {
-	issuer := &certIssuer{
+func (r *HTTPProxyReconciler) getIssuer(hp *projectcontourv1.HTTPProxy) cmmetav1.ObjectReference {
+	issuer := cmmetav1.ObjectReference{
 		Group: "cert-manager.io",
 	}
 
@@ -219,5 +209,4 @@ func (r *HTTPProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).For(&projectcontourv1.HTTPProxy{}).Owns(obj).Complete(r)
-
 }
