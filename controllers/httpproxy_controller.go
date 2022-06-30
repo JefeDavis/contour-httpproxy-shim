@@ -56,7 +56,7 @@ type HTTPProxyReconciler struct {
 
 //+kubebuilder:rbac:groups=projectcontour.io,resources=httpproxies,verbs=get;list;watch
 //+kubebuilder:rbac:groups=projectcontour.io,resources=httpproxies/status,verbs=get
-//+kubebuilder:rbac:groups=cert-manager.io, resources=certificates,verb=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cert-manager.io, resources=certificates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=services/status,verbs=ge
 
@@ -161,12 +161,14 @@ func (r *HTTPProxyReconciler) reconcileCertificate(ctx context.Context, hp *proj
 func (r *HTTPProxyReconciler) getIssuer(hp *projectcontourv1.HTTPProxy) cmmetav1.ObjectReference {
 	issuer := cmmetav1.ObjectReference{
 		Group: r.DefaultIssuerGroup,
+		Kind:  r.DefaultIssuerKind,
+		Name:  r.DefaultIssuerName,
 	}
 
 	if name, ok := hp.Annotations[clusterIssuerAnnotation]; ok {
 		issuer.Name = name
 
-		if kind, ok := hp.Annotations[clusterIssuerDefaultKind]; ok {
+		if kind, ok := hp.Annotations[issuerKindAnnotation]; ok {
 			issuer.Kind = kind
 		} else {
 			issuer.Kind = clusterIssuerDefaultKind
