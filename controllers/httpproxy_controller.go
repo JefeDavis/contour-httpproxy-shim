@@ -25,7 +25,6 @@ import (
 	projectcontourv1 "github.com/projectcontour/contour/apis/projectcontour/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,29 +40,18 @@ const (
 )
 
 const (
-	certificateKind          = "Certificate"
 	issuerDefaultKind        = "Issuer"
 	clusterIssuerDefaultKind = "ClusterIssuer"
-)
-
-const (
-	usageDigitalSignature = "digital signature"
-	usageKeyEncipherment  = "key encipherment"
-	usageServerAuth       = "server auth"
-	usageClientAuth       = "client auth"
 )
 
 // HTTPProxyReconciler reconciles a HttpProxy object
 type HTTPProxyReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
-}
-
-type certIssuer struct {
-	Group string
-	Kind  string
-	Name  string
+	Log                logr.Logger
+	Scheme             *runtime.Scheme
+	DefaultIssuerName  string
+	DefaultIssuerKind  string
+	DefaultIssuerGroup string
 }
 
 //+kubebuilder:rbac:groups=projectcontour.io,resources=httpproxies,verbs=get;list;watch
@@ -136,6 +124,10 @@ func (r *HTTPProxyReconciler) reconcileCertificate(ctx context.Context, hp *proj
 	}
 
 	certificate := &cmv1.Certificate{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "cert-manager.io/v1",
+			Kind:       "Certificate",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      hp.Name,
 			Namespace: hp.Namespace,
@@ -155,7 +147,7 @@ func (r *HTTPProxyReconciler) reconcileCertificate(ctx context.Context, hp *proj
 
 	err := r.Patch(ctx, certificate, client.Apply, &client.PatchOptions{
 		Force:        func() *bool { b := true; return &b }(),
-		FieldManager: "cert-manager-httpproxy-shim",
+		FieldManager: "cert-manager-contour-httpproxy",
 	})
 	if err != nil {
 		return err
@@ -168,7 +160,7 @@ func (r *HTTPProxyReconciler) reconcileCertificate(ctx context.Context, hp *proj
 
 func (r *HTTPProxyReconciler) getIssuer(hp *projectcontourv1.HTTPProxy) cmmetav1.ObjectReference {
 	issuer := cmmetav1.ObjectReference{
-		Group: "cert-manager.io",
+		Group: r.DefaultIssuerGroup,
 	}
 
 	if name, ok := hp.Annotations[clusterIssuerAnnotation]; ok {
@@ -201,12 +193,12 @@ func (r *HTTPProxyReconciler) getIssuer(hp *projectcontourv1.HTTPProxy) cmmetav1
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *HTTPProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "cert-manager.io/v1",
-			"kind":       certificateKind,
+	certificate := &cmv1.Certificate{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "cert-manager.io/v1",
+			Kind:       cmv1.CertificateKind,
 		},
 	}
 
-	return ctrl.NewControllerManagedBy(mgr).For(&projectcontourv1.HTTPProxy{}).Owns(obj).Complete(r)
+	return ctrl.NewControllerManagedBy(mgr).For(&projectcontourv1.HTTPProxy{}).Owns(certificate).Complete(r)
 }
