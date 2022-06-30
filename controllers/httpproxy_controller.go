@@ -58,7 +58,7 @@ type HTTPProxyReconciler struct {
 //+kubebuilder:rbac:groups=projectcontour.io,resources=httpproxies/status,verbs=get
 //+kubebuilder:rbac:groups=cert-manager.io, resources=certificates,verb=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
-//+kubebuilder:rbac:groups="",resources=services/status,verbs=get
+//+kubebuilder:rbac:groups="",resources=services/status,verbs=ge
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
